@@ -40,7 +40,7 @@ class display_support {
         Builds HTML showing AVG results. */
 
     public static function mkresavg($counts, $total, $question, $showtotals, $sort, $stravgvalue='') {
-        global $CFG;
+        global $CFG, $DB;
         $stravgrank = get_string('averagerank', 'questionnaire');
         $osgood = false;
         if ($question->precise == 3) { // Osgood's semantic differential.
@@ -177,6 +177,11 @@ class display_support {
                         if ($contents->modname) {
                             $content = $contents->text;
                         }
+                    }
+                    if ($question->type == 'Instructor List') {
+                         $fname = $DB->get_field('user', 'lastname', array('id' => $content));
+                         $lname = $fname. ' '.$DB->get_field('user', 'firstname', array('id' => $content));
+                         $content = $lname;                    
                     }
                     if ($osgood) {
                         $table->data[] = array('<div class="mdl-right">'.

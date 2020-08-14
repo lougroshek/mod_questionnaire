@@ -1003,7 +1003,6 @@ class rate extends question {
                 foreach ($oldchoiceids as $choiceid) {
                     \mod_questionnaire\question\choice\choice::delete_from_db_by_id($choiceid);
                 }
-
                 // First get all existing rank responses for this question.
                 $responses = $DB->get_recordset('questionnaire_response_rank', ['question_id' => $question->id]);
                 // Iterating over each response record ensures we won't change an existing record more than once.

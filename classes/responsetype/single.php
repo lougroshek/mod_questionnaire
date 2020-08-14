@@ -155,7 +155,7 @@ class single extends responsetype {
             $params = array_merge($params, $rparams);
             $rsql = ' AND response_id ' . $rsql;
         }
-
+        $type = $this->question->type;
         // Added qc.id to preserve original choices ordering.
         $sql = 'SELECT rt.id, qc.id as cid, qc.content ' .
                'FROM {questionnaire_quest_choice} qc, ' .
@@ -193,7 +193,6 @@ class single extends responsetype {
      */
     public function get_feedback_scores(array $rids) {
         global $DB;
-
         $rsql = '';
         $params = [$this->question->id];
         if (!empty($rids)) {

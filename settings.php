@@ -55,8 +55,8 @@ if ($ADMIN->fulltree) {
     foreach($rolelist as $role) {
          $roles[$role->id] = $role->shortname;     
     }
-    $settings->add(new admin_setting_configselect('questionnaire/teacherrole',
+    $settings->add(new admin_setting_configmultiselect('questionnaire/teacherrole',
                                     get_string('teacherrole', 'questionnaire'),
-                                    $str, 4, $roles));
+                                     '', array_keys($roles), $roles));
             
 }

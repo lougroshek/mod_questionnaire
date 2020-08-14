@@ -146,23 +146,38 @@ class rank extends responsetype {
      */
     public function get_results($rids=false, $anonymous=false) {
         global $DB;
-
         $rsql = '';
         if (!empty($rids)) {
             list($rsql, $params) = $DB->get_in_or_equal($rids);
             $rsql = ' AND response_id ' . $rsql;
         }
-
         $select = 'question_id=' . $this->question->id . ' AND content NOT LIKE \'!other%\' ORDER BY id ASC';
-        if ($rows = $DB->get_records_select('questionnaire_quest_choice', $select)) {
-            foreach ($rows as $row) {
-                $this->counts[$row->content] = new \stdClass();
-                $nbna = $DB->count_records(static::response_table(), array('question_id' => $this->question->id,
-                                'choice_id' => $row->id, 'rankvalue' => '-1'));
-                $this->counts[$row->content]->nbna = $nbna;
-            }
+        $qtable = 'questionnaire_quest_choice';
+        $qtype = $this->question->type;
+        if ($qtype == 'Instructor List') {
+            $qtable = 'questionnaire_quest_ins';
+            $select = 'question_id=' . $this->question->id . ' AND userid NOT LIKE \'!other%\' ORDER BY id ASC';
         }
-
+        if ($qtype == 'Instructor List') {
+            if ($rows = $DB->get_records_select($qtable, $select)) {
+            	 foreach ($rows as $row) {
+                   $this->counts[$row->staffid] = new \stdClass();
+                   $nbna = $DB->count_records(static::response_table(), array('question_id' => $this->question->id,
+                                    'choice_id' => $row->id, 'rankvalue' => '-1'));
+                   $this->counts[$row->staffid]->nbna = $nbna;
+                }
+            }
+        } else {
+            if ($rows = $DB->get_records_select('questionnaire_quest_choice', $select)) {
+                foreach ($rows as $row) {
+                   $this->counts[$row->content] = new \stdClass();
+                   $nbna = $DB->count_records(static::response_table(), array('question_id' => $this->question->id,
+                                    'choice_id' => $row->id, 'rankvalue' => '-1'));
+                   $this->counts[$row->content]->nbna = $nbna;
+                }
+            }
+        
+        } 
         // For nameddegrees, need an array by degree value of positions (zero indexed).
         $rankvalue = [];
         if (!empty($this->question->nameddegrees)) {
@@ -171,67 +186,135 @@ class rank extends responsetype {
 
         $isrestricted = ($this->question->length < count($this->question->choices)) && $this->question->no_duplicate_choices();
         // Usual case.
-        if (!$isrestricted) {
-            if (!empty ($rankvalue)) {
-                $sql = "SELECT r.id, c.content, r.rankvalue, c.id AS choiceid
-                FROM {questionnaire_quest_choice} c, {".static::response_table()."} r
-                WHERE r.choice_id = c.id
-                AND c.question_id = " . $this->question->id . "
-                AND r.rankvalue >= 0{$rsql}
-                ORDER BY choiceid";
-                $results = $DB->get_records_sql($sql, $params);
-                $value = [];
-                foreach ($results as $result) {
-                    if (isset($rankvalue[$result->rankvalue])) {
-                        if (isset ($value[$result->choiceid])) {
-                            $value[$result->choiceid] += $rankvalue[$result->rankvalue] + 1;
-                        } else {
-                            $value[$result->choiceid] = $rankvalue[$result->rankvalue] + 1;
+        if ($qtype == 'Instructor List') {
+            if (!$isrestricted) {
+                if (!empty ($rankvalue)) {
+                	echo ' not empty ';
+                    $sql = "SELECT r.id, c.staffid, r.rankvalue, c.id AS choiceid
+                            FROM {questionnaire_quest_ins} c, {".static::response_table()."} r
+                            WHERE r.choice_id = c.id
+                            AND c.question_id = " . $this->question->id . "
+                            AND r.rankvalue >= 0{$rsql}
+                            ORDER BY choiceid";
+                    $results = $DB->get_records_sql($sql, $params);
+                    $value = [];
+                    foreach ($results as $result) {
+                        if (isset($rankvalue[$result->rankvalue])) {
+                            if (isset ($value[$result->choiceid])) {
+                                $value[$result->choiceid] += $rankvalue[$result->rankvalue] + 1;
+                            } else {
+                                $value[$result->choiceid] = $rankvalue[$result->rankvalue] + 1;
+                            }
                         }
                     }
                 }
-            }
 
-            $sql = "SELECT c.id, c.content, a.average, a.num
-                    FROM {questionnaire_quest_choice} c
-                    INNER JOIN
-                         (SELECT c2.id, AVG(a2.rankvalue) AS average, COUNT(a2.response_id) AS num
-                          FROM {questionnaire_quest_choice} c2, {".static::response_table()."} a2
-                          WHERE c2.question_id = ? AND a2.question_id = ? AND a2.choice_id = c2.id AND a2.rankvalue >= 0{$rsql}
-                          GROUP BY c2.id) a ON a.id = c.id
-                          order by c.id";
-            $results = $DB->get_records_sql($sql, array_merge(array($this->question->id, $this->question->id), $params));
-            if (!empty ($rankvalue)) {
-                foreach ($results as $key => $result) {
-                    if (isset($value[$key])) {
-                        $result->averagevalue = $value[$key] / $result->num;
+                $sql = "SELECT c.id, c.staffid, a.average, a.num
+                        FROM {questionnaire_quest_ins} c
+                            INNER JOIN
+                            (SELECT c2.id, AVG(a2.rankvalue) AS average, COUNT(a2.response_id) AS num
+                            FROM {questionnaire_quest_ins} c2, {".static::response_table()."} a2
+                            WHERE c2.question_id = ? AND a2.question_id = ? AND a2.choice_id = c2.id AND a2.rankvalue >= 0{$rsql}
+                            GROUP BY c2.id) a ON a.id = c.id
+                            order by c.id";
+                            
+                $results = $DB->get_records_sql($sql, array_merge(array($this->question->id, $this->question->id), $params));
+                if (!empty ($rankvalue)) {
+                    foreach ($results as $key => $result) {
+                        if (isset($value[$key])) {
+                            $result->averagevalue = $value[$key] / $result->num;
+                        }
                     }
                 }
+                // Reindex by 'content'. Can't do this from the query as it won't work with MS-SQL.
+                foreach ($results as $key => $result) {
+                    $results[$result->staffid] = $result;
+                    unset($results[$key]);
+                }
+                return $results;
+                // Case where scaleitems is less than possible choices.
+             } else {
+             	 $sql = "SELECT c.id, c.staffid, a.sum, a.num
+                        FROM {questionnaire_quest_ins} c
+                        INNER JOIN
+                            (SELECT c2.id, SUM(a2.rankvalue) AS sum, COUNT(a2.response_id) AS num
+                            FROM {questionnaire_quest_ins} c2, {".static::response_table()."} a2
+                            WHERE c2.question_id = ? AND a2.question_id = ? AND a2.choice_id = c2.id AND a2.rankvalue >= 0{$rsql}
+                            GROUP BY c2.id) a ON a.id = c.id";
+                $results = $DB->get_records_sql($sql, array_merge(array($this->question->id, $this->question->id), $params));
+                // Formula to calculate the best ranking order.
+                $nbresponses = count($rids);
+                foreach ($results as $key => $result) {
+                    $result->average = ($result->sum + ($nbresponses - $result->num) * ($this->length + 1)) / $nbresponses;
+                    $results[$result->staffid] = $result;
+                    unset($results[$key]);
+                }
+                return $results;
             }
-            // Reindex by 'content'. Can't do this from the query as it won't work with MS-SQL.
-            foreach ($results as $key => $result) {
-                $results[$result->content] = $result;
-                unset($results[$key]);
+
+        } else {        	
+            if (!$isrestricted) {
+                if (!empty ($rankvalue)) {
+                    $sql = "SELECT r.id, c.content, r.rankvalue, c.id AS choiceid
+                            FROM {questionnaire_quest_choice} c, {".static::response_table()."} r
+                            WHERE r.choice_id = c.id
+                            AND c.question_id = " . $this->question->id . "
+                            AND r.rankvalue >= 0{$rsql}
+                            ORDER BY choiceid";
+                    $results = $DB->get_records_sql($sql, $params);
+                    $value = [];
+                    foreach ($results as $result) {
+                        if (isset($rankvalue[$result->rankvalue])) {
+                            if (isset ($value[$result->choiceid])) {
+                                $value[$result->choiceid] += $rankvalue[$result->rankvalue] + 1;
+                            } else {
+                                $value[$result->choiceid] = $rankvalue[$result->rankvalue] + 1;
+                            }
+                        }
+                    }
+                }
+
+                $sql = "SELECT c.id, c.content, a.average, a.num
+                        FROM {questionnaire_quest_choice} c
+                            INNER JOIN
+                            (SELECT c2.id, AVG(a2.rankvalue) AS average, COUNT(a2.response_id) AS num
+                            FROM {questionnaire_quest_choice} c2, {".static::response_table()."} a2
+                            WHERE c2.question_id = ? AND a2.question_id = ? AND a2.choice_id = c2.id AND a2.rankvalue >= 0{$rsql}
+                            GROUP BY c2.id) a ON a.id = c.id
+                            order by c.id";
+                $results = $DB->get_records_sql($sql, array_merge(array($this->question->id, $this->question->id), $params));
+                if (!empty ($rankvalue)) {
+                    foreach ($results as $key => $result) {
+                        if (isset($value[$key])) {
+                            $result->averagevalue = $value[$key] / $result->num;
+                        }
+                    }
+                }
+                // Reindex by 'content'. Can't do this from the query as it won't work with MS-SQL.
+                foreach ($results as $key => $result) {
+                    $results[$result->content] = $result;
+                    unset($results[$key]);
+                }
+                return $results;
+                // Case where scaleitems is less than possible choices.
+             } else {
+                $sql = "SELECT c.id, c.content, a.sum, a.num
+                        FROM {questionnaire_quest_choice} c
+                        INNER JOIN
+                            (SELECT c2.id, SUM(a2.rankvalue) AS sum, COUNT(a2.response_id) AS num
+                            FROM {questionnaire_quest_choice} c2, {".static::response_table()."} a2
+                            WHERE c2.question_id = ? AND a2.question_id = ? AND a2.choice_id = c2.id AND a2.rankvalue >= 0{$rsql}
+                            GROUP BY c2.id) a ON a.id = c.id";
+                $results = $DB->get_records_sql($sql, array_merge(array($this->question->id, $this->question->id), $params));
+                // Formula to calculate the best ranking order.
+                $nbresponses = count($rids);
+                foreach ($results as $key => $result) {
+                    $result->average = ($result->sum + ($nbresponses - $result->num) * ($this->length + 1)) / $nbresponses;
+                    $results[$result->content] = $result;
+                    unset($results[$key]);
+                }
+                return $results;
             }
-            return $results;
-            // Case where scaleitems is less than possible choices.
-        } else {
-            $sql = "SELECT c.id, c.content, a.sum, a.num
-                    FROM {questionnaire_quest_choice} c
-                    INNER JOIN
-                         (SELECT c2.id, SUM(a2.rankvalue) AS sum, COUNT(a2.response_id) AS num
-                          FROM {questionnaire_quest_choice} c2, {".static::response_table()."} a2
-                          WHERE c2.question_id = ? AND a2.question_id = ? AND a2.choice_id = c2.id AND a2.rankvalue >= 0{$rsql}
-                          GROUP BY c2.id) a ON a.id = c.id";
-            $results = $DB->get_records_sql($sql, array_merge(array($this->question->id, $this->question->id), $params));
-            // Formula to calculate the best ranking order.
-            $nbresponses = count($rids);
-            foreach ($results as $key => $result) {
-                $result->average = ($result->sum + ($nbresponses - $result->num) * ($this->length + 1)) / $nbresponses;
-                $results[$result->content] = $result;
-                unset($results[$key]);
-            }
-            return $results;
         }
     }
 
@@ -242,7 +325,6 @@ class rank extends responsetype {
      */
     public function get_feedback_scores(array $rids) {
         global $DB;
-
         $rsql = '';
         $params = [$this->question->id];
         if (!empty($rids)) {
@@ -283,7 +365,6 @@ class rank extends responsetype {
      */
     public function display_results($rids=false, $sort='', $anonymous=false) {
         $output = '';
-
         if (is_array($rids)) {
             $prtotal = 1;
         } else if (is_int($rids)) {
@@ -319,6 +400,7 @@ class rank extends responsetype {
             $output .= \mod_questionnaire\responsetype\display_support::mkresavg($this->counts, count($rids),
                 $this->question, $prtotal, $sort, $stravgvalue);
 
+       
             $output .= \mod_questionnaire\responsetype\display_support::mkrescount($this->counts, $rids, $rows, $this->question,
                 $sort);
         } else {

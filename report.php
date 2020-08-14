@@ -27,6 +27,13 @@ $individualresponse = optional_param('individualresponse', false, PARAM_INT);
 $currentgroupid = optional_param('group', 0, PARAM_INT); // Groupid.
 $user = optional_param('user', '', PARAM_INT);
 $userid = $USER->id;
+$CFG->ruserid = 0;
+if (isset($rid)) {
+    $ruser = $DB->get_record('questionnaire_response', array('id' => $rid));
+    if ($ruser) { 
+        $CFG->ruserid = $ruser->userid;
+    }
+}
 switch ($action) {
     case 'vallasort':
         $sort = 'ascending';
@@ -486,7 +493,7 @@ switch ($action) {
 
         // Use Moodle's core download function for outputting csv.
         $rowheaders = array_shift($output);
-        download_as_dataformat($name, 'csv', $rowheaders, $output);
+        \core\dataformat::download_data($name, 'csv', $rowheaders, $output); 
         exit();
         break;
 
@@ -592,7 +599,6 @@ switch ($action) {
         $respinfo .= $strsort;
         $respinfo .= $questionnaire->renderer->help_icon('orderresponses', 'questionnaire');
         $questionnaire->page->add_to_page('respondentinfo', $respinfo);
-
         $ret = $questionnaire->survey_results(1, 1, '', '', '', false, $currentgroupid, $sort);
 
         echo $questionnaire->renderer->render($questionnaire->page);
@@ -635,15 +641,15 @@ switch ($action) {
                 }
             }
         }
-
         if ($byresponse || $rid) {
+
             // Available group modes (0 = no groups; 1 = separate groups; 2 = visible groups).
             if ($groupmode > 0) {
                 switch ($currentgroupid) {
                     case 0:     // All participants.
                         $resps = $respsallparticipants;
                         break;
-                    default:     // Members of a specific group.
+                    default:     // Members of a specific group
                         $resps = $questionnaire->get_responses(false, $currentgroupid);
                 }
                 if (empty($resps)) {
@@ -710,7 +716,7 @@ switch ($action) {
             }
             $questionnaire->survey_results_navbar_alpha($rid, $currentgroupid, $cm, $byresponse);
             if (!$byresponse) { // Show respondents individual responses.
-                $questionnaire->view_response($rid, '', false, $resps, true, true, false, $currentgroupid);
+                 $questionnaire->view_response($rid, '', false, $resps, true, true, false, $currentgroupid);
             }
         }
 

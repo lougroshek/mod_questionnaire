@@ -2392,7 +2392,6 @@ class questionnaire {
             }
             $i++;
         }
-
         $url = $CFG->wwwroot.'/mod/questionnaire/report.php?action=vresp&group='.$currentgroupid.'&individualresponse=1';
         if (!$byresponse) {     // Display navbar.
             // Build navbar.
@@ -2687,7 +2686,6 @@ class questionnaire {
         $qnum = 0;
 
         $anonymous = $this->respondenttype == 'anonymous';
-
         foreach ($this->questions as $question) {
             if ($question->type_id == QUESPAGEBREAK) {
                 continue;
@@ -2755,7 +2753,7 @@ class questionnaire {
      * @return array
      */
     protected function choice_types() {
-        return [QUESRADIO, QUESDROP, QUESCHECK, QUESRATE];
+        return [QUESRADIO, QUESDROP, QUESCHECK, QUESRATE, QUESINSRATE];
     }
 
     /**
@@ -3014,7 +3012,8 @@ class questionnaire {
             '0',    // 7: rating -> number
             '0',    // 8: rate -> number
             '1',    // 9: date -> string
-            '0'     // 10: numeric -> number.
+            '0',     // 10: numeric -> number.
+            '0'
         );
 
         if (!$survey = $DB->get_record('questionnaire_survey', array('id' => $this->survey->id))) {
@@ -3031,12 +3030,12 @@ class questionnaire {
         $uniquetypes = $this->get_survey_questiontypes();
 
         if (count(array_intersect($choicetypes, $uniquetypes)) > 0) {
-            $choiceparams = [$this->survey->id];
+            $choiceparams = array($this->survey->id, $this->survey->id);
             $choicesql = "
                 SELECT DISTINCT c.id as cid, q.id as qid, q.precise AS precise, q.name, c.content
                   FROM {questionnaire_question} q
                   JOIN {questionnaire_quest_choice} c ON question_id = q.id
-                 WHERE q.surveyid = ? ORDER BY cid ASC
+                 WHERE q.surveyid = ? 
             ";
             $choicerecords = $DB->get_records_sql($choicesql, $choiceparams);
             $choicesbyqid = [];
@@ -3050,8 +3049,27 @@ class questionnaire {
                     $choicesbyqid[$choicerecord->qid][$choicerecord->cid] = $choicerecord;
                 }
             }
-        }
+            $choiceparams = array($this->survey->id, $this->survey->id);
+            $choiceinssql = "
+                SELECT DISTINCT c.id as cid, q.id as qid, q.precise AS precise, q.name, c.staffid as content
+                  FROM {questionnaire_question} q
+                  JOIN {questionnaire_quest_ins} c ON question_id = q.id
+                 WHERE q.surveyid = ? 
+            ";
+            $choiceinsrecords = $DB->get_records_sql($choiceinssql, $choiceparams);
+            $choicesinsbyqid = [];
+            if (!empty($choiceinsrecords)) {
+                // Hash the options by question id.
+                foreach ($choiceinsrecords as $choiceinsrecord) {
+                    if (!isset($choicesbyqid[$choiceinsrecord->qid])) {
+                        // New question id detected, intialise empty array to store choices.
+                        $choicesinsbyqid[$choiceinsrecord->qid] = [];
+                    }
+                    $choicesinsbyqid[$choiceinsrecord->qid][$choiceinsrecord->cid] = $choiceinsrecord;
+                }
+            }
 
+        }
         $num = 1;
 
         $questionidcols = [];
@@ -3071,8 +3089,11 @@ class questionnaire {
                 if (!isset($choicesbyqid[$qid])) {
                     throw new coding_exception('Choice question has no choices!', 'question id '.$qid.' of type '.$type);
                 }
-                $choices = $choicesbyqid[$qid];
-
+                if ($type == 11) {
+                    $choices = $choicesinsbyqid[$qid];
+                } else {
+                    $choices = $choicesbyqid[$qid];
+                }                
                 switch ($type) {
 
                     case QUESRADIO: // Single.
@@ -3092,7 +3113,7 @@ class questionnaire {
                             }
                         }
                         break;
-
+                                   
                     case QUESCHECK: // Multiple.
                         $thisnum = 1;
                         foreach ($choices as $choice) {
@@ -3121,11 +3142,9 @@ class questionnaire {
                             }
                         }
                         break;
-
                     case QUESRATE: // Rate.
                         foreach ($choices as $choice) {
                             $nameddegrees = 0;
-                            $modality = '';
                             $content = $choice->content;
                             $osgood = false;
                             if (\mod_questionnaire\question\rate::type_is_osgood_rate_scale($choice->precise)) {
@@ -3164,6 +3183,48 @@ class questionnaire {
                             }
                         }
                         break;
+                       case QUESINSRATE: //  Rate.
+                       foreach ($choices as $choice) {
+                            $nameddegrees = 0;
+                            $content = $choice->content;
+                            $osgood = false;
+                            if (\mod_questionnaire\question\rate::type_is_osgood_rate_scale($choice->precise)) {
+                                $osgood = true;
+                            }
+                            if (preg_match("/^[0-9]{1,3}=/", $content, $ndd)) {
+                                $nameddegrees++;
+                            } else {
+                                if ($osgood) {
+                                    list($contentleft, $contentright) = array_merge(preg_split('/[|]/', $content), array(' '));
+                                    $contents = questionnaire_choice_values($contentleft);
+                                    if ($contents->title) {
+                                        $contentleft = $contents->title;
+                                    }
+                                    $contents = questionnaire_choice_values($contentright);
+                                    if ($contents->title) {
+                                        $contentright = $contents->title;
+                                    }
+                                    $modality = strip_tags($contentleft.'|'.$contentright);
+                                    $modality = preg_replace("/[\r\n\t]/", ' ', $modality);
+                                } else {
+                                    $contents = questionnaire_choice_values($content);
+                                    if ($contents->modname) {
+                                        $modality = $contents->modname;
+                                    } else if ($contents->title) {
+                                        $modality = $contents->title;
+                                    } else {
+                                        $modality = strip_tags($contents->text);
+                                        $modality = preg_replace("/[\r\n\t]/", ' ', $modality);
+                                    }
+                                }
+                                $col = $choice->name.'->'.$modality;
+                                $columns[][$qpos] = $col;
+                                $questionidcols[][$qpos] = $qid.'_'.$choice->cid;
+                                array_push($types, $idtocsvmap[$type]);
+                            }
+                        }
+                        break;
+
                 }
             } else {
                 $columns[][$qpos] = $col;
@@ -3209,7 +3270,6 @@ class questionnaire {
             $questionsbyposition[$p] = $this->questions[$questionid];
             $p++;
         }
-
         $formatoptions = new stdClass();
         $formatoptions->filter = false;  // To prevent any filtering in CSV output.
 
@@ -3255,7 +3315,12 @@ class questionnaire {
                 $responsetxt = $choicetxt;
                 $row[$position] = $responsetxt;
             } else {
-                $position = $questionpositions[$qid];
+                if ($type == 11) {
+                    $key = $qid.'_'.$responserow->choice_id;
+            	     $position = $questionpositions[$key];               
+                } else { 
+            	     $position = $questionpositions[$qid];
+                }                
                 if ($questionobj->has_choices()) {
                     // This is choice type question, so process as so.
                     $c = 0;
@@ -3269,10 +3334,15 @@ class questionnaire {
                             }
                         }
                     }
-
-                    $content = $choicesbyqid[$qid][$responserow->choice_id]->content;
-                    if (\mod_questionnaire\question\choice\choice::content_is_other_choice($content)) {
-                        // If this has an "other" text, use it.
+                    if ($type == 11) {
+                        $content = $choicesinsbyqid[$qid][$responserow->choice_id]->content;
+                        $fname = $DB->get_field('user', 'lastname', array('id' => $content));
+                        $responsetxt = $fname. ' '.$DB->get_field('user', 'firstname', array('id' => $content));
+                     } else {
+                        $content = $choicesbyqid[$qid][$responserow->choice_id]->content; 
+                    }
+                    if (\mod_questionnaire\question\choice\choice::content_is_other_choice($content) and $type <> 11) {
+                        // If this has an "other" text, use it.                    
                         $responsetxt = \mod_questionnaire\question\choice\choice::content_other_choice_display($content);
                         $responsetxt1 = $responserow->response;
                     } else if (($choicecodes == 1) && ($choicetext == 1)) {
@@ -3295,6 +3365,11 @@ class questionnaire {
                         $responsetxt = preg_replace("/[\r\n\t]/", ' ', $responsetxt);
                     }
                 }
+                    if ($type == 11) {
+                        $content = $choicesinsbyqid[$qid][$responserow->choice_id]->content;
+                        $fname = $DB->get_field('user', 'lastname', array('id' => $content));
+                        $responsetxt = $fname. ' '.$DB->get_field('user', 'firstname', array('id' => $content));
+                  }
                 $row[$position] = $responsetxt;
                 // Check for "other" text and set it to the next position if present.
                 if (!empty($responsetxt1)) {

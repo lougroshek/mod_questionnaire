@@ -188,7 +188,6 @@ class insrate extends question {
     protected function question_survey_display($response, $descendantsdata, $blankquestionnaire=false) {
         $choicetags = new \stdClass();
         $choicetags->qelements = [];
-
         $disabled = '';
         if ($blankquestionnaire) {
             $disabled = ' disabled="disabled"';
@@ -398,7 +397,6 @@ class insrate extends question {
      */
     protected function response_survey_display($response) {
         static $uniquetag = 0;  // To make sure all radios have unique names.
-
         $resptags = new \stdClass();
         $resptags->headers = [];
         $resptags->rows = [];
@@ -990,7 +988,6 @@ class insrate extends question {
                 $newvalues[$oldval++] = key($nameddegree);
             }
         }
-
         if (!empty($nameddegrees)) {
             if ($question->insert_nameddegrees($nameddegrees)) {
                 // Remove the old named desgree from the choices table.

@@ -142,7 +142,6 @@ abstract class question {
         if ($id) {
             $question = $DB->get_record('questionnaire_question', ['id' => $id]);
         }
-
         if (is_object($question)) {
             $this->id = $question->id;
             $this->surveyid = $question->surveyid;
@@ -234,7 +233,7 @@ abstract class question {
      * @throws \dml_exception
      */
     private function get_choices() {
-        global $DB, $USER, $COURSE;
+        global $DB, $USER, $COURSE, $CFG;
         $qtype = trim($this->type);
         if ($qtype == 'Instructor List') {
             $teacherroleid = get_config('questionnaire', 'teacherrole');
@@ -244,7 +243,11 @@ abstract class question {
                 // Check to see if the choices have been generated.
                 foreach ($teachers as $teacher) {
                     $teacherid = $teacher->id;
-                    $insrecord = $DB->get_record('questionnaire_quest_ins', array('userid' => $USER->id,
+                    $user = $USER->id;
+                    if ($CFG->ruserid > 0) {
+                        $user = $CFG->ruserid;  
+                    }
+                    $insrecord = $DB->get_record('questionnaire_quest_ins', array('userid' => $user,
                                                  'staffid' => $teacherid, 'question_id' => $this->id));
                     if (!$insrecord) {
                         $choiceins = new \stdClass();
@@ -255,7 +258,7 @@ abstract class question {
                     }
                 }
                 if ($choices = $DB->get_records('questionnaire_quest_ins',
-                                ['question_id' => $this->id, 'userid' => $USER->id], 'id ASC')) {
+                                ['question_id' => $this->id, 'userid' => $user], 'id ASC')) {
                     foreach ($choices as $choice) {
                         $fname = $DB->get_field('user', 'lastname', array('id' => $choice->staffid));
                         $lname = $fname. ' '.$DB->get_field('user', 'firstname', array('id' => $choice->staffid));
@@ -1222,7 +1225,9 @@ abstract class question {
                 if (!empty($allchoices)) {
                     $allchoices .= "\n";
                 }
-                $allchoices .= $choice->content;
+                if ( $this->type_id <> 11) {
+                    $allchoices .= $choice->content;
+                }
             }
 
             $helpname = $this->helpname();

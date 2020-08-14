@@ -23,6 +23,10 @@ $courseid = required_param('courseid', PARAM_INT);
 $sec = required_param('sec', PARAM_INT);
 $null = null;
 $referer = $CFG->wwwroot.'/mod/questionnaire/report.php';
+$userid = $USER->id;
+$CFG->ruserid = 0;
+$ruser = $DB->get_record('questionnaire_response', array('id' => $rid));
+$CFG->ruserid = $ruser->userid;
 
 if (! $questionnaire = $DB->get_record("questionnaire", array("id" => $qid))) {
     print_error('invalidcoursemodule');
