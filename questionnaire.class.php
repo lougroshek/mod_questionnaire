@@ -3073,7 +3073,6 @@ class questionnaire {
         $num = 1;
 
         $questionidcols = [];
-
         foreach ($this->questions as $question) {
             // Skip questions that aren't response capable.
             if (!isset($question->responsetype)) {
@@ -3187,6 +3186,7 @@ class questionnaire {
                        foreach ($choices as $choice) {
                             $nameddegrees = 0;
                             $content = $choice->content;
+                            // Get the instructor name.
                             $osgood = false;
                             if (\mod_questionnaire\question\rate::type_is_osgood_rate_scale($choice->precise)) {
                                 $osgood = true;
@@ -3335,9 +3335,10 @@ class questionnaire {
                         }
                     }
                     if ($type == 11) {
-                        $content = $choicesinsbyqid[$qid][$responserow->choice_id]->content;
-                        $fname = $DB->get_field('user', 'lastname', array('id' => $content));
-                        $responsetxt = $fname. ' '.$DB->get_field('user', 'firstname', array('id' => $content));
+                    	   //var_dump($choicesinsbyqid[$qid][$responserow->ranked_value]);
+                    	   //exit();
+                        $content = $responserow->rankvalue;
+                        $responsetxt = $content;
                      } else {
                         $content = $choicesbyqid[$qid][$responserow->choice_id]->content; 
                     }
@@ -3366,9 +3367,8 @@ class questionnaire {
                     }
                 }
                     if ($type == 11) {
-                        $content = $choicesinsbyqid[$qid][$responserow->choice_id]->content;
-                        $fname = $DB->get_field('user', 'lastname', array('id' => $content));
-                        $responsetxt = $fname. ' '.$DB->get_field('user', 'firstname', array('id' => $content));
+                        $content = $responserow->rankvalue;
+                        $responsetxt = $content;
                   }
                 $row[$position] = $responsetxt;
                 // Check for "other" text and set it to the next position if present.
