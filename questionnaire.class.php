@@ -3335,8 +3335,6 @@ class questionnaire {
                         }
                     }
                     if ($type == 11) {
-                    	   //var_dump($choicesinsbyqid[$qid][$responserow->ranked_value]);
-                    	   //exit();
                         $content = $responserow->rankvalue;
                         $responsetxt = $content;
                      } else {
