@@ -244,8 +244,10 @@ abstract class question {
                 foreach ($teachers as $teacher) {
                     $teacherid = $teacher->id;
                     $user = $USER->id;
-                    if ($CFG->ruserid > 0) {
-                        $user = $CFG->ruserid;  
+                    if (isset($CFG->ruserid)) {
+                        if ($CFG->ruserid > 0) {
+                            $user = $CFG->ruserid;
+                        }
                     }
                     $insrecord = $DB->get_record('questionnaire_quest_ins', array('userid' => $user,
                                                  'staffid' => $teacherid, 'question_id' => $this->id));

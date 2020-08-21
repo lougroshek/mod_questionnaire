@@ -3092,7 +3092,7 @@ class questionnaire {
                     $choices = $choicesinsbyqid[$qid];
                 } else {
                     $choices = $choicesbyqid[$qid];
-                }                
+                }
                 switch ($type) {
 
                     case QUESRADIO: // Single.
@@ -3112,7 +3112,6 @@ class questionnaire {
                             }
                         }
                         break;
-                                   
                     case QUESCHECK: // Multiple.
                         $thisnum = 1;
                         foreach ($choices as $choice) {
