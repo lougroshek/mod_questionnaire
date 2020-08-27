@@ -551,7 +551,7 @@ switch ($action) {
                 $first = $first .' '.$last;
                 
                 // Columns are Response, submitted on, Instution, department, course, group, id, fullname, username
-                $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username, '', '', '');
+                $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username);
                 for($k = 0; $k < $staffcnt; $k++) {
                     array_push($ln, $cols[$k]);
                     // Reset.
@@ -568,7 +568,7 @@ switch ($action) {
 	        }
        }
        $first = $first .' '.$last;
-       $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username, '', '', '');
+       $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username);
   
        for($k = 0; $k < $staffcnt; $k++ ) {
            array_push($ln, $cols[$k]);
