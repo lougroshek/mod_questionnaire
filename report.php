@@ -490,9 +490,92 @@ switch ($action) {
         $choicetext  = optional_param('choicetext', '0', PARAM_INT);
         $showincompletes  = optional_param('complete', '0', PARAM_INT);
         $output = $questionnaire->generate_csv('', $user, $choicecodes, $choicetext, $currentgroupid, $showincompletes);
-
+        $cnt = 3;
         // Use Moodle's core download function for outputting csv.
         $rowheaders = array_shift($output);
+        $headcnt = count($rowheaders);
+        $queryins = "Select DISTINCT(c.staffid)
+             FROM {questionnaire_question} q
+             JOIN {questionnaire_quest_ins} c
+              ON question_id = q.id
+              WHERE q.surveyid =".$instance."
+              ORDER by c.staffid";
+
+         $resultins = $DB->get_records_sql($queryins);
+         $staff = [];
+         $staffcnt = 0;
+         foreach($resultins as $result) {
+           $staff[] = $result->staffid;
+           $userid = $result->staffid;
+           $lname = $DB->get_field('user','lastname', array('id' => $userid));
+           $fname = $DB->get_field('user','firstname', array('id' => $userid)) . ' '.$lname;
+           array_push($rowheaders, $fname);
+           $staffcnt = $staffcnt + 1;
+        }
+        $olduser = 0;
+        // Get all the results
+        $queryres = "SELECT CONCAT_WS('_', qr.id, 'ratescale', qrr.id) AS id, qr.submitted, qr.complete,
+                    qr.grade, qr.userid, u.firstnamephonetic, u.lastnamephonetic, u.middlename,
+                    u.alternatename, u.firstname, u.lastname,
+                    u.username, u.department, u.institution, u.id as usrid, qr.id AS rid,
+                    qrr.question_id, qrr.choice_id, null AS response,
+                    qrr.rankvalue
+             FROM   {questionnaire_response} qr
+             JOIN   {questionnaire_response}_rank qrr
+               ON   qrr.response_id = qr.id AND qr.questionnaireid =".$instance ."
+                    AND qr.complete = 'y'
+                    LEFT JOIN {user} u ON u.id = qr.userid
+                    ORDER BY usrid, id";
+
+         $surveyres = $DB->get_records_sql($queryres);
+         $cols = [];
+         for($k = 0; $k < $staffcnt; $k++ ) {
+             $cols[$k] = 0;
+         }
+         $cnt = 0;
+         foreach ($surveyres as $survey){
+	         $choiceid = $survey->choice_id;
+	         // Get the staff id.
+	         $staffid = $DB->get_field('questionnaire_quest_ins', 'staffid', array('id' => $choiceid));
+            $rankvalue = $survey->rankvalue;
+	         $key = array_search($staffid, $staff);
+	         $cols[$key] = $rankvalue;
+	         $rankvalue = $survey->rankvalue;
+  	         if ($olduser == 0) {
+	             $olduser = $survey->userid;
+	         }
+
+	         if ($olduser <> $survey->userid) {
+                // display old values;
+                $ln = [];
+                $first = $first .' '.$last;
+                
+                // Columns are Response, submitted on, Instution, department, course, group, id, fullname, username
+                $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username, '', '', '');
+                for($k = 0; $k < $staffcnt; $k++) {
+                    array_push($ln, $cols[$k]);
+                    // Reset.
+                    $cols[$k] = 0;
+                }
+                $output[$cnt] = $ln;
+                $cnt = $cnt + 1;
+                $olduser = $survey->userid;
+	        } else {
+	          $last = $survey->lastname;
+	          $first = $survey->firstname;
+	          $submit = date('Y-m-d', $survey->submitted);
+	          $username = $survey->username;
+	        }
+       }
+       $first = $first .' '.$last;
+       $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username, '', '', '');
+  
+       for($k = 0; $k < $staffcnt; $k++ ) {
+           array_push($ln, $cols[$k]);
+       }
+       $output[$cnt] = $ln;
+
+ 
         \core\dataformat::download_data($name, 'csv', $rowheaders, $output); 
         exit();
         break;

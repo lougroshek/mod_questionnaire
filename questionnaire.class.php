@@ -3050,23 +3050,32 @@ class questionnaire {
                 }
             }
             $choiceparams = array($this->survey->id, $this->survey->id);
-            $choiceinssql = "
-                SELECT DISTINCT c.id as cid, q.id as qid, q.precise AS precise, q.name, c.staffid as content
-                  FROM {questionnaire_question} q
-                  JOIN {questionnaire_quest_ins} c ON question_id = q.id
-                 WHERE q.surveyid = ? 
-            ";
-            $choiceinsrecords = $DB->get_records_sql($choiceinssql, $choiceparams);
+            $choiceinssql = "Select DISTINCT(c.staffid)
+                             FROM {questionnaire_question} q
+                             JOIN {questionnaire_quest_ins} c
+                             ON question_id = q.id
+                             WHERE q.surveyid =".$this->survey->id."
+                             ORDER by c.staffid";
+
+            $choiceinsrecords = $DB->get_records_sql($choiceinssql);
+            $rowheaders = [];
+            $rowheaders[] = 'user name ';
+            $staff = [];
+            $staffcnt = 0;
+
             $choicesinsbyqid = [];
             if (!empty($choiceinsrecords)) {
                 // Hash the options by question id.
-                foreach ($choiceinsrecords as $choiceinsrecord) {
-                    if (!isset($choicesbyqid[$choiceinsrecord->qid])) {
-                        // New question id detected, intialise empty array to store choices.
-                        $choicesinsbyqid[$choiceinsrecord->qid] = [];
-                    }
-                    $choicesinsbyqid[$choiceinsrecord->qid][$choiceinsrecord->cid] = $choiceinsrecord;
+                $staffcnt = 0;
+                foreach($choiceinsrecords as $result) {
+                   $staff[] = $result->staffid;
+                   $userid = $result->staffid;
+                   $lname = $DB->get_field('user','lastname', array('id' => $userid));
+                   $fname = $DB->get_field('user','firstname', array('id' => $userid)) . ' '.$lname;
+                   $rowheaders[] = $fname;
+                   $staffcnt = $staffcnt + 1;
                 }
+
             }
 
         }
@@ -3089,7 +3098,7 @@ class questionnaire {
                     throw new coding_exception('Choice question has no choices!', 'question id '.$qid.' of type '.$type);
                 }
                 if ($type == 11) {
-                    $choices = $choicesinsbyqid[$qid];
+               //     $choices = $choicesinsbyqid[$qid];
                 } else {
                     $choices = $choicesbyqid[$qid];
                 }
@@ -3182,46 +3191,7 @@ class questionnaire {
                         }
                         break;
                        case QUESINSRATE: //  Rate.
-                       foreach ($choices as $choice) {
-                            $nameddegrees = 0;
-                            $content = $choice->content;
-                            // Get the instructor name.
-                            $osgood = false;
-                            if (\mod_questionnaire\question\rate::type_is_osgood_rate_scale($choice->precise)) {
-                                $osgood = true;
-                            }
-                            if (preg_match("/^[0-9]{1,3}=/", $content, $ndd)) {
-                                $nameddegrees++;
-                            } else {
-                                if ($osgood) {
-                                    list($contentleft, $contentright) = array_merge(preg_split('/[|]/', $content), array(' '));
-                                    $contents = questionnaire_choice_values($contentleft);
-                                    if ($contents->title) {
-                                        $contentleft = $contents->title;
-                                    }
-                                    $contents = questionnaire_choice_values($contentright);
-                                    if ($contents->title) {
-                                        $contentright = $contents->title;
-                                    }
-                                    $modality = strip_tags($contentleft.'|'.$contentright);
-                                    $modality = preg_replace("/[\r\n\t]/", ' ', $modality);
-                                } else {
-                                    $contents = questionnaire_choice_values($content);
-                                    if ($contents->modname) {
-                                        $modality = $contents->modname;
-                                    } else if ($contents->title) {
-                                        $modality = $contents->title;
-                                    } else {
-                                        $modality = strip_tags($contents->text);
-                                        $modality = preg_replace("/[\r\n\t]/", ' ', $modality);
-                                    }
-                                }
-                                $col = $choice->name.'->'.$modality;
-                                $columns[][$qpos] = $col;
-                                $questionidcols[][$qpos] = $qid.'_'.$choice->cid;
-                                array_push($types, $idtocsvmap[$type]);
-                            }
-                        }
+
                         break;
 
                 }
@@ -3241,12 +3211,19 @@ class questionnaire {
         for ($c = 0; $c < $nbinfocols; $c++) {
             $tmparr[] = null; // Pad with non question columns.
         }
+        $cntcol = 0;
         foreach ($questionidcols as $i => $positions) {
             foreach ($positions as $position => $qid) {
                 $tmparr[] = $qid;
+                $cntcol = $cntcol + 1;
             }
         }
+        $cols = [];
         $questionidcols = $tmparr;
+        for($k = 0; $k < $staffcnt; $k++ ) {
+            $cols[$k] = 0;
+        }
+
 
         // Create array of question positions hashed by question / question + choiceid.
         // And array of questions hashed by position.
@@ -3287,7 +3264,9 @@ class questionnaire {
             $question = $this->questions[$qid];
             $qtype = intval($question->type_id);
             $questionobj = $this->questions[$qid];
-
+            if ($qtype == 11) {
+                break;            
+            }    
             if ($prevresprow !== false && $prevresprow->rid !== $rid) {
                 $output[] = $this->process_csv_row($row, $prevresprow, $currentgroupid, $questionsbyposition,
                     $nbinfocols, $numrespcols, $showincompletes);
@@ -3315,8 +3294,7 @@ class questionnaire {
                 $row[$position] = $responsetxt;
             } else {
                 if ($type == 11) {
-                    $key = $qid.'_'.$responserow->choice_id;
-            	     $position = $questionpositions[$key];               
+                    // ignore
                 } else { 
             	     $position = $questionpositions[$qid];
                 }                
@@ -3415,6 +3393,7 @@ class questionnaire {
             $out = 'Q'.sprintf("%02d", $numquestion).$sep.$thisoutput;
             $output[0][$i] = $out;
         }
+
         return $output;
     }
 
