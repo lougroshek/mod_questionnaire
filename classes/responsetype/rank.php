@@ -162,8 +162,13 @@ class rank extends responsetype {
             if ($rows = $DB->get_records_select($qtable, $select)) {
             	 foreach ($rows as $row) {
                    $this->counts[$row->staffid] = new \stdClass();
+                   //$nbna = $DB->count_records(static::response_table(), array('question_id' => $this->question->id,
+                  //                  'choice_id' => $row->id, 'rankvalue' => '-1'));
                    $nbna = $DB->count_records(static::response_table(), array('question_id' => $this->question->id,
-                                    'choice_id' => $row->id, 'rankvalue' => '-1'));
+                                     'choice_id' => $row->id));
+                                    
+                   //echo 'nbna '.$nbna;
+                   //exit();
                    $this->counts[$row->staffid]->nbna = $nbna;
                 }
             }
@@ -189,7 +194,6 @@ class rank extends responsetype {
         if ($qtype == 'Instructor List') {
             if (!$isrestricted) {
                 if (!empty ($rankvalue)) {
-                	echo ' not empty ';
                     $sql = "SELECT r.id, c.staffid, r.rankvalue, c.id AS choiceid
                             FROM {questionnaire_quest_ins} c, {".static::response_table()."} r
                             WHERE r.choice_id = c.id
@@ -217,7 +221,7 @@ class rank extends responsetype {
                             WHERE c2.question_id = ? AND a2.question_id = ? AND a2.choice_id = c2.id AND a2.rankvalue >= 0{$rsql}
                             GROUP BY c2.id) a ON a.id = c.id
                             order by c.id";
-                            
+                
                 $results = $DB->get_records_sql($sql, array_merge(array($this->question->id, $this->question->id), $params));
                 if (!empty ($rankvalue)) {
                     foreach ($results as $key => $result) {
@@ -226,11 +230,15 @@ class rank extends responsetype {
                         }
                     }
                 }
-                // Reindex by 'content'. Can't do this from the query as it won't work with MS-SQL.
-                foreach ($results as $key => $result) {
-                    $results[$result->staffid] = $result;
-                    unset($results[$key]);
-                }
+                 if ($qtype != 'Instructor List') {
+                     // Reindex by 'content'. Can't do this from the query as it won't work with MS-SQL.
+                     foreach ($results as $key => $result) {
+                       $results[$result->staffid] = $result;
+                       unset($results[$key]);
+                     }
+                 }
+// var_dump($results);
+// exit();
                 return $results;
                 // Case where scaleitems is less than possible choices.
              } else {
@@ -370,7 +378,6 @@ class rank extends responsetype {
         } else if (is_int($rids)) {
             $prtotal = 0;
         }
-
         if ($rows = $this->get_results($rids, $sort, $anonymous)) {
             $stravgvalue = ''; // For printing table heading.
             foreach ($this->counts as $key => $value) {

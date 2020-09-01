@@ -181,7 +181,7 @@ class display_support {
                     if ($question->type == 'Instructor List') {
                          $fname = $DB->get_field('user', 'lastname', array('id' => $content));
                          $lname = $fname. ' '.$DB->get_field('user', 'firstname', array('id' => $content));
-                         $content = $lname;                    
+                         $content = $lname;
                     }
                     if ($osgood) {
                         $table->data[] = array('<div class="mdl-right">'.
@@ -202,7 +202,9 @@ class display_support {
                                     sprintf('%.1f', $avg).'&nbsp;'.$stravgval];
                             }
                         } else if ($nbna != 0) {
-                            $table->data[] = array(format_text($content, FORMAT_HTML, ['noclean' => true]), $out, '', $nbna);
+                        	if ($question->type != 'Instructor List') { 
+                               $table->data[] = array(format_text($content, FORMAT_HTML, ['noclean' => true]), $out, '', $nbna);
+                           }     
                         }
                     }
                 } // End if named degrees.
@@ -237,6 +239,7 @@ class display_support {
                 ' AND r.choice_id = c.id ' .
                 $rsql .
                 ' ORDER BY choiceid, rankvalue ASC';
+            $tot = count($rids);
         } else {
             $sql = 'SELECT r.id, c.content, r.rankvalue, c.id AS choiceid ' .
                 'FROM {questionnaire_quest_choice} c , ' .
@@ -247,8 +250,8 @@ class display_support {
                 $rsql .
                 ' ORDER BY choiceid, rankvalue ASC';
         }
+       
         $choices = $DB->get_records_sql($sql, $params);
-
         // Sort rows (results) by average value.
         if ($sort != 'default') {
             $sortarray = array();
@@ -376,7 +379,11 @@ class display_support {
                 // number of NOT AVAILABLE responses for this possible answer.
                 $nbna = $counts[$content]->nbna;
                 // TOTAL number of responses for this possible answer.
-                $total = $counts[$content]->num;
+                if ($qtype == 'Instructor List') {
+                    $total = $tot;
+                } else {      
+                    $total = $counts[$content]->num;
+                }
                 $nbresp = '<strong>'.$total.'<strong>';
                 if ($osgood) {
                     // Ensure there are two bits of content.

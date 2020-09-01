@@ -504,12 +504,13 @@ switch ($action) {
          $resultins = $DB->get_records_sql($queryins);
          $staff = [];
          $staffcnt = 0;
+         array_push($rowheaders, 'question name');
          foreach($resultins as $result) {
            $staff[] = $result->staffid;
            $userid = $result->staffid;
            $lname = $DB->get_field('user','lastname', array('id' => $userid));
            $fname = $DB->get_field('user','firstname', array('id' => $userid)) . ' '.$lname;
-           array_push($rowheaders, $fname);
+           array_push($rowheaders, $userid);
            $staffcnt = $staffcnt + 1;
         }
         $olduser = 0;
@@ -537,21 +538,24 @@ switch ($action) {
 	         $choiceid = $survey->choice_id;
 	         // Get the staff id.
 	         $staffid = $DB->get_field('questionnaire_quest_ins', 'staffid', array('id' => $choiceid));
+	         $questionid = $survey->question_id;
+	         $questionname = $DB->get_field('questionnaire_question', 'name', array('id' => $questionid));
             $rankvalue = $survey->rankvalue;
 	         $key = array_search($staffid, $staff);
 	         $cols[$key] = $rankvalue;
 	         $rankvalue = $survey->rankvalue;
   	         if ($olduser == 0) {
 	             $olduser = $survey->userid;
+   	        	 $oldquestion = $questionname;
 	         }
 
 	         if ($olduser <> $survey->userid) {
                 // display old values;
                 $ln = [];
                 $first = $first .' '.$last;
-                
                 // Columns are Response, submitted on, Instution, department, course, group, id, fullname, username
                 $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username);
+                array_push($ln, $oldquestion);
                 for($k = 0; $k < $staffcnt; $k++) {
                     array_push($ln, $cols[$k]);
                     // Reset.
@@ -561,6 +565,7 @@ switch ($action) {
                 $cnt = $cnt + 1;
                 $olduser = $survey->userid;
 	        } else {
+	        	 $oldquestion = $questionname;
 	          $last = $survey->lastname;
 	          $first = $survey->firstname;
 	          $submit = date('Y-m-d', $survey->submitted);
@@ -569,6 +574,7 @@ switch ($action) {
        }
        $first = $first .' '.$last;
        $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username);
+       array_push($ln, $oldquestion);
   
        for($k = 0; $k < $staffcnt; $k++ ) {
            array_push($ln, $cols[$k]);
@@ -654,6 +660,7 @@ switch ($action) {
             }
         } else {
             $resps = $respsallparticipants;
+            
         }
         if (!empty($resps)) {
             // NOTE: response_analysis uses $resps to get the id's of the responses only.
