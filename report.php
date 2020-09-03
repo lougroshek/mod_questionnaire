@@ -494,7 +494,7 @@ switch ($action) {
         // Use Moodle's core download function for outputting csv.
         $rowheaders = array_shift($output);
         $headcnt = count($rowheaders);
-        $queryins = "Select DISTINCT(c.staffid)
+        $queryins = "Select DISTINCT(c.staffid), q.name
              FROM {questionnaire_question} q
              JOIN {questionnaire_quest_ins} c
               ON question_id = q.id
@@ -504,13 +504,15 @@ switch ($action) {
          $resultins = $DB->get_records_sql($queryins);
          $staff = [];
          $staffcnt = 0;
-         array_push($rowheaders, 'question name');
+        // array_push($rowheaders, 'question name');
          foreach($resultins as $result) {
            $staff[] = $result->staffid;
            $userid = $result->staffid;
+           $qname = $result->name;
            $lname = $DB->get_field('user','lastname', array('id' => $userid));
            $fname = $DB->get_field('user','firstname', array('id' => $userid)) . ' '.$lname;
-           array_push($rowheaders, $userid);
+           $display = $qname.' -> '.$userid;
+           array_push($rowheaders, $display);
            $staffcnt = $staffcnt + 1;
         }
         $olduser = 0;
@@ -555,7 +557,7 @@ switch ($action) {
                 $first = $first .' '.$last;
                 // Columns are Response, submitted on, Instution, department, course, group, id, fullname, username
                 $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username);
-                array_push($ln, $oldquestion);
+               // array_push($ln, $oldquestion);
                 for($k = 0; $k < $staffcnt; $k++) {
                     array_push($ln, $cols[$k]);
                     // Reset.
@@ -574,7 +576,7 @@ switch ($action) {
        }
        $first = $first .' '.$last;
        $ln = array('', $submit, $survey->institution, $survey->department, $course->fullname, '', '', $first, $username);
-       array_push($ln, $oldquestion);
+       //array_push($ln, $oldquestion);
   
        for($k = 0; $k < $staffcnt; $k++ ) {
            array_push($ln, $cols[$k]);

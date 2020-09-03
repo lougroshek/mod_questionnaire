@@ -395,6 +395,11 @@ class display_support {
                     if ($contents->modname) {
                         $content = $contents->text;
                     }
+                    if ($qtype == 'Instructor List') {
+                        $lname = $DB->get_field('user','lastname', array('id' => $content));
+                        $fname = $DB->get_field('user','firstname', array('id' => $content)) . ' '.$lname;
+                        $content = $fname;
+                    }
                     $data[] = format_text($content, FORMAT_HTML, ['noclean' => true]);
                 }
                 // Display ranks/rates numbers.
