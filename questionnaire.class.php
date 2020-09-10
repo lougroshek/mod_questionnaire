@@ -2971,6 +2971,432 @@ class questionnaire {
         }
         return $positioned;
     }
+    /* {{{ proto array survey_generate_csv(int surveyid)
+    Exports the results of a survey to an array.
+    */
+    public function generate_csv_ins($rid='', $userid='', $choicecodes=1, $choicetext=0, $currentgroupid, $showincompletes = 0) {
+        global $DB;
+
+        raise_memory_limit('1G');
+
+        $output = array();
+        $stringother = get_string('other', 'questionnaire');
+
+        $config = get_config('questionnaire', 'downloadoptions');
+        $options = empty($config) ? array() : explode(',', $config);
+        if ($showincompletes == 1) {
+            $options[] = 'complete';
+        }
+        $columns = array();
+        $types = array();
+        foreach ($options as $option) {
+            if (in_array($option, array('response', 'submitted', 'id'))) {
+                $columns[] = get_string($option, 'questionnaire');
+                $types[] = 0;
+            } else {
+                $columns[] = get_string($option);
+                $types[] = 1;
+            }
+        }
+        $nbinfocols = count($columns);
+
+        $idtocsvmap = array(
+            '0',    // 0: unused
+            '0',    // 1: bool -> boolean
+            '1',    // 2: text -> string
+            '1',    // 3: essay -> string
+            '0',    // 4: radio -> string
+            '0',    // 5: check -> string
+            '0',    // 6: dropdn -> string
+            '0',    // 7: rating -> number
+            '0',    // 8: rate -> number
+            '1',    // 9: date -> string
+            '0',     // 10: numeric -> number.
+            '0'
+        );
+
+        if (!$survey = $DB->get_record('questionnaire_survey', array('id' => $this->survey->id))) {
+            print_error ('surveynotexists', 'questionnaire');
+        }
+
+        // Get all responses for this survey in one go.
+        $allresponsesrs = $this->get_survey_all_responses($rid, $userid, $currentgroupid, $showincompletes);
+
+        // Do we have any questions of type RADIO, DROP, CHECKBOX OR RATE? If so lets get all their choices in one go.
+        $choicetypes = array('11');
+
+        // Get unique list of question types used in this survey.
+        $uniquetypes = $this->get_survey_questiontypes();
+
+        if (count(array_intersect($choicetypes, $uniquetypes)) > 0) {
+            $choiceparams = array($this->survey->id, $this->survey->id);
+            $choicesql = "
+                SELECT DISTINCT c.id as cid, q.id as qid, q.precise AS precise, q.name, c.content
+                  FROM {questionnaire_question} q
+                  JOIN {questionnaire_quest_choice} c ON question_id = q.id
+                 WHERE q.type_id = '11' and q.surveyid = ? 
+            ";
+            $choicerecords = $DB->get_records_sql($choicesql, $choiceparams);
+            $choicesbyqid = [];
+            if (!empty($choicerecords)) {
+                // Hash the options by question id.
+                foreach ($choicerecords as $choicerecord) {
+                    if (!isset($choicesbyqid[$choicerecord->qid])) {
+                        // New question id detected, intialise empty array to store choices.
+                        $choicesbyqid[$choicerecord->qid] = [];
+                    }
+                    $choicesbyqid[$choicerecord->qid][$choicerecord->cid] = $choicerecord;
+                }
+            }
+            $choiceparams = array($this->survey->id, $this->survey->id);
+            $choiceinssql = "Select DISTINCT(c.staffid)
+                             FROM {questionnaire_question} q
+                             JOIN {questionnaire_quest_ins} c
+                             ON question_id = q.id
+                             WHERE q.surveyid =".$this->survey->id."
+                             ORDER by c.staffid";
+
+            $choiceinsrecords = $DB->get_records_sql($choiceinssql);
+            $rowheaders = [];
+            $rowheaders[] = 'user name ';
+            $staff = [];
+            $staffcnt = 0;
+
+            $choicesinsbyqid = [];
+            if (!empty($choiceinsrecords)) {
+                // Hash the options by question id.
+                $staffcnt = 0;
+                foreach($choiceinsrecords as $result) {
+                   $staff[] = $result->staffid;
+                   $userid = $result->staffid;
+                   $lname = $DB->get_field('user','lastname', array('id' => $userid));
+                   $fname = $DB->get_field('user','firstname', array('id' => $userid)) . ' '.$lname;
+                   $rowheaders[] = $fname;
+                   $staffcnt = $staffcnt + 1;
+                }
+
+            }
+
+        }
+        $num = 1;
+
+        $questionidcols = [];
+        foreach ($this->questions as $question) {
+            // Skip questions that aren't response capable.
+            if (!isset($question->responsetype) or ($question->type_id == 11)) {
+                continue;
+            }
+            // Establish the table's field names.
+            $qid = $question->id;
+            $qpos = $question->position;
+            $col = $question->name;
+            $type = $question->type_id;
+            
+            if (in_array($type, $choicetypes)) {
+                /* single or multiple or rate */
+                if (!isset($choicesbyqid[$qid])) {
+                    throw new coding_exception('Choice question has no choices!', 'question id '.$qid.' of type '.$type);
+                }
+                if ($type == 11) {
+               //     $choices = $choicesinsbyqid[$qid];
+                } else {
+                    $choices = $choicesbyqid[$qid];
+                }
+                switch ($type) {
+
+                    case QUESRADIO: // Single.
+                    case QUESDROP:
+                        $columns[][$qpos] = $col;
+                        $questionidcols[][$qpos] = $qid;
+                        array_push($types, $idtocsvmap[$type]);
+                        $thisnum = 1;
+                        foreach ($choices as $choice) {
+                            $content = $choice->content;
+                            // If "Other" add a column for the actual "other" text entered.
+                            if (\mod_questionnaire\question\choice\choice::content_is_other_choice($content)) {
+                                $col = $choice->name.'_'.$stringother;
+                                $columns[][$qpos] = $col;
+                                $questionidcols[][$qpos] = null;
+                                array_push($types, '0');
+                            }
+                        }
+                        break;
+                    case QUESCHECK: // Multiple.
+                        $thisnum = 1;
+                        foreach ($choices as $choice) {
+                            $content = $choice->content;
+                            $modality = '';
+                            $contents = questionnaire_choice_values($content);
+                            if ($contents->modname) {
+                                $modality = $contents->modname;
+                            } else if ($contents->title) {
+                                $modality = $contents->title;
+                            } else {
+                                $modality = strip_tags($contents->text);
+                            }
+                            $col = $choice->name.'->'.$modality;
+                            $columns[][$qpos] = $col;
+                            $questionidcols[][$qpos] = $qid.'_'.$choice->cid;
+                            array_push($types, '0');
+                            // If "Other" add a column for the "other" checkbox.
+                            // Then add a column for the actual "other" text entered.
+                            if (\mod_questionnaire\question\choice\choice::content_is_other_choice($content)) {
+                                $content = $stringother;
+                                $col = $choice->name.'->['.$content.']';
+                                $columns[][$qpos] = $col;
+                                $questionidcols[][$qpos] = null;
+                                array_push($types, '0');
+                            }
+                        }
+                        break;
+                    case QUESRATE: // Rate.
+                        foreach ($choices as $choice) {
+                            $nameddegrees = 0;
+                            $content = $choice->content;
+                            $osgood = false;
+                            if (\mod_questionnaire\question\rate::type_is_osgood_rate_scale($choice->precise)) {
+                                $osgood = true;
+                            }
+                            if (preg_match("/^[0-9]{1,3}=/", $content, $ndd)) {
+                                $nameddegrees++;
+                            } else {
+                                if ($osgood) {
+                                    list($contentleft, $contentright) = array_merge(preg_split('/[|]/', $content), array(' '));
+                                    $contents = questionnaire_choice_values($contentleft);
+                                    if ($contents->title) {
+                                        $contentleft = $contents->title;
+                                    }
+                                    $contents = questionnaire_choice_values($contentright);
+                                    if ($contents->title) {
+                                        $contentright = $contents->title;
+                                    }
+                                    $modality = strip_tags($contentleft.'|'.$contentright);
+                                    $modality = preg_replace("/[\r\n\t]/", ' ', $modality);
+                                } else {
+                                    $contents = questionnaire_choice_values($content);
+                                    if ($contents->modname) {
+                                        $modality = $contents->modname;
+                                    } else if ($contents->title) {
+                                        $modality = $contents->title;
+                                    } else {
+                                        $modality = strip_tags($contents->text);
+                                        $modality = preg_replace("/[\r\n\t]/", ' ', $modality);
+                                    }
+                                }
+                                $col = $choice->name.'->'.$modality;
+                                $columns[][$qpos] = $col;
+                                $questionidcols[][$qpos] = $qid.'_'.$choice->cid;
+                                array_push($types, $idtocsvmap[$type]);
+                            }
+                        }
+                        break;
+                       case QUESINSRATE: //  Rate.
+
+                        break;
+
+                }
+            } else {
+                $columns[][$qpos] = $col;
+                $questionidcols[][$qpos] = $qid;
+                array_push($types, $idtocsvmap[$type]);
+            }
+            $num++;
+        }
+
+        array_push($output, $columns);
+        $numrespcols = count($output[0]); // Number of columns used for storing question responses.
+
+        // Flatten questionidcols.
+        $tmparr = [];
+        for ($c = 0; $c < $nbinfocols; $c++) {
+            $tmparr[] = null; // Pad with non question columns.
+        }
+        $cntcol = 0;
+        foreach ($questionidcols as $i => $positions) {
+            foreach ($positions as $position => $qid) {
+                $tmparr[] = $qid;
+                $cntcol = $cntcol + 1;
+            }
+        }
+        $cols = [];
+        $questionidcols = $tmparr;
+        for($k = 0; $k < $staffcnt; $k++ ) {
+            $cols[$k] = 0;
+        }
+
+
+        // Create array of question positions hashed by question / question + choiceid.
+        // And array of questions hashed by position.
+        $questionpositions = [];
+        $questionsbyposition = [];
+        $p = 0;
+        foreach ($questionidcols as $qid) {
+            if ($qid === null) {
+                // This is just padding, skip.
+                $p++;
+                continue;
+            }
+            $questionpositions[$qid] = $p;
+            if (strpos($qid, '_') !== false) {
+                $tmparr = explode ('_', $qid);
+                $questionid = $tmparr[0];
+            } else {
+                $questionid = $qid;
+            }
+            $questionsbyposition[$p] = $this->questions[$questionid];
+            $p++;
+        }
+        $formatoptions = new stdClass();
+        $formatoptions->filter = false;  // To prevent any filtering in CSV output.
+
+        // Get textual versions of responses, add them to output at the correct col position.
+        $prevresprow = false; // Previous response row.
+        $row = [];
+        foreach ($allresponsesrs as $responserow) {
+            $rid = $responserow->rid;
+            $qid = $responserow->question_id;
+
+            // It's possible for a response to exist for a deleted question. Ignore these.
+            if (!isset($this->questions[$qid])) {
+                break;
+            }
+
+            $question = $this->questions[$qid];
+            $qtype = intval($question->type_id);
+            $questionobj = $this->questions[$qid];
+            if ($qtype == 11) {
+                break;            
+            }    
+            if ($prevresprow !== false && $prevresprow->rid !== $rid) {
+                $output[] = $this->process_csv_row($row, $prevresprow, $currentgroupid, $questionsbyposition,
+                    $nbinfocols, $numrespcols, $showincompletes);
+                $row = [];
+            }
+
+            if ($qtype === QUESRATE || $qtype === QUESCHECK) {
+                $key = $qid.'_'.$responserow->choice_id;
+                $position = $questionpositions[$key];
+                if ($qtype === QUESRATE) {
+                    $choicetxt = $responserow->rankvalue;
+                } else {
+                    $content = $choicesbyqid[$qid][$responserow->choice_id]->content;
+                    if (\mod_questionnaire\question\choice\choice::content_is_other_choice($content)) {
+                        // If this is an "other" column, put the text entered in the next position.
+                        $row[$position + 1] = $responserow->response;
+                        $choicetxt = empty($responserow->choice_id) ? '0' : '1';
+                    } else if (!empty($responserow->choice_id)) {
+                        $choicetxt = '1';
+                    } else {
+                        $choicetxt = '0';
+                    }
+                }
+                $responsetxt = $choicetxt;
+                $row[$position] = $responsetxt;
+            } else {
+                if ($type == 11) {
+                    // ignore
+                } else { 
+            	     $position = $questionpositions[$qid];
+                }                
+                if ($questionobj->has_choices()) {
+                    // This is choice type question, so process as so.
+                    $c = 0;
+                    if (in_array(intval($question->type_id), $choicetypes)) {
+                        $choices = $choicesbyqid[$qid];
+                        // Get position of choice.
+                        foreach ($choices as $choice) {
+                            $c++;
+                            if ($responserow->choice_id === $choice->cid) {
+                                break;
+                            }
+                        }
+                    }
+                    if ($type == 11) {
+                        $content = $responserow->rankvalue;
+                        $responsetxt = $content;
+                     } else {
+                        $content = $choicesbyqid[$qid][$responserow->choice_id]->content; 
+                    }
+                    if (\mod_questionnaire\question\choice\choice::content_is_other_choice($content) and $type <> 11) {
+                        // If this has an "other" text, use it.                    
+                        $responsetxt = \mod_questionnaire\question\choice\choice::content_other_choice_display($content);
+                        $responsetxt1 = $responserow->response;
+                    } else if (($choicecodes == 1) && ($choicetext == 1)) {
+                        $responsetxt = $c.' : '.$content;
+                    } else if ($choicecodes == 1) {
+                        $responsetxt = $c;
+                    } else {
+                        $responsetxt = $content;
+                    }
+                } else if (intval($qtype) === QUESYESNO) {
+                    // At this point, the boolean responses are returned as characters in the "response"
+                    // field instead of "choice_id" for csv exports (CONTRIB-6436).
+                    $responsetxt = $responserow->response === 'y' ? "1" : "0";
+                } else {
+                    // Strip potential html tags from modality name.
+                    $responsetxt = $responserow->response;
+                    if (!empty($responsetxt)) {
+                        $responsetxt = $responserow->response;
+                        $responsetxt = strip_tags($responsetxt);
+                        $responsetxt = preg_replace("/[\r\n\t]/", ' ', $responsetxt);
+                    }
+                }
+                    if ($type == 11) {
+                        $content = $responserow->rankvalue;
+                        $responsetxt = $content;
+                  }
+                $row[$position] = $responsetxt;
+                // Check for "other" text and set it to the next position if present.
+                if (!empty($responsetxt1)) {
+                    $row[$position + 1] = $responsetxt1;
+                    unset($responsetxt1);
+                }
+            }
+
+            $prevresprow = $responserow;
+        }
+
+        if ($prevresprow !== false) {
+            // Add final row to output. May not exist if no response data was ever present.
+            $output[] = $this->process_csv_row($row, $prevresprow, $currentgroupid, $questionsbyposition,
+                $nbinfocols, $numrespcols, $showincompletes);
+        }
+
+        // Change table headers to incorporate actual question numbers.
+        $numquestion = 0;
+        $oldkey = 0;
+
+        for ($i = $nbinfocols; $i < $numrespcols; $i++) {
+            $sep = '';
+            $thisoutput = current($output[0][$i]);
+            $thiskey = key($output[0][$i]);
+            // Case of unnamed rate single possible answer (full stop char is used for support).
+            if (strstr($thisoutput, '->.')) {
+                $thisoutput = str_replace('->.', '', $thisoutput);
+            }
+            // If variable is not named no separator needed between Question number and potential sub-variables.
+            if ($thisoutput == '' || strstr($thisoutput, '->.') || substr($thisoutput, 0, 2) == '->'
+                || substr($thisoutput, 0, 1) == '_') {
+                $sep = '';
+            } else {
+                $sep = '_';
+            }
+            if ($thiskey > $oldkey) {
+                $oldkey = $thiskey;
+                $numquestion++;
+            }
+            // Abbreviated modality name in multiple or rate questions (COLORS->blue=the color of the sky...).
+            $pos = strpos($thisoutput, '=');
+            if ($pos) {
+                $thisoutput = substr($thisoutput, 0, $pos);
+            }
+            $out = 'Q'.sprintf("%02d", $numquestion).$sep.$thisoutput;
+            $output[0][$i] = $out;
+        }
+       return $output;
+ 
+   
+    }
 
     /* {{{ proto array survey_generate_csv(int surveyid)
     Exports the results of a survey to an array.
@@ -3035,7 +3461,7 @@ class questionnaire {
                 SELECT DISTINCT c.id as cid, q.id as qid, q.precise AS precise, q.name, c.content
                   FROM {questionnaire_question} q
                   JOIN {questionnaire_quest_choice} c ON question_id = q.id
-                 WHERE q.surveyid = ? 
+                 WHERE q.type_id <> '11' and q.surveyid = ? 
             ";
             $choicerecords = $DB->get_records_sql($choicesql, $choiceparams);
             $choicesbyqid = [];
@@ -3084,7 +3510,7 @@ class questionnaire {
         $questionidcols = [];
         foreach ($this->questions as $question) {
             // Skip questions that aren't response capable.
-            if (!isset($question->responsetype)) {
+            if (!isset($question->responsetype) or ($question->type_id == 11)) {
                 continue;
             }
             // Establish the table's field names.
@@ -3092,6 +3518,7 @@ class questionnaire {
             $qpos = $question->position;
             $col = $question->name;
             $type = $question->type_id;
+            
             if (in_array($type, $choicetypes)) {
                 /* single or multiple or rate */
                 if (!isset($choicesbyqid[$qid])) {

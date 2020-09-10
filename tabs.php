@@ -30,6 +30,7 @@ $tabs = array();
 $row  = array();
 $inactive = array();
 $activated = array();
+$row3ins = false;
 if (!isset($SESSION->questionnaire)) {
     $SESSION->questionnaire = new stdClass();
 }
@@ -91,6 +92,11 @@ if ($questionnaire->capabilities->readownresponses && ($usernumresp > 0)) {
             $argstr2 = $argstr.'&action=dwnpg';
             $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr2);
             $row2[] = new tabobject('mydownloadcsv', $link, get_string('downloadtextformat', 'questionnaire'));
+            $argstr3 = $argstr.'&action=dwnins';
+            $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
+            $row3[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
+            $rows3ins = true;
+ 
         }
     } else if (in_array($currenttab, array('mybyresponse', 'mysummary'))) {
         $inactive[] = 'myreport';
@@ -146,7 +152,7 @@ if ($questionnaire->can_view_all_responses_anytime($grouplogic, $resplogic)) {
     if (in_array($currenttab, array('valldefault',  'vallasort', 'vallarsort', 'deleteall', 'downloadcsv'))) {
         $activated[] = 'vall';
         $row3 = array();
-
+        $row4 = array();
         $argstr2 = $argstr.'&action=vall&group='.$currentgroupid;
         $row3[] = new tabobject('valldefault', $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr2),
                                 get_string('order_default', 'questionnaire'));
@@ -168,6 +174,10 @@ if ($questionnaire->can_view_all_responses_anytime($grouplogic, $resplogic)) {
             $argstr2 = $argstr.'&action=dwnpg&group='.$currentgroupid;
             $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr2);
             $row3[] = new tabobject('downloadcsv', $link, get_string('downloadtextformat', 'questionnaire'));
+            $argstr3 = $argstr.'&action=dwnins';
+            $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
+            $row4[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
+            $row3ins = true;
         }
     }
 
@@ -216,6 +226,10 @@ if ($questionnaire->can_view_all_responses_anytime($grouplogic, $resplogic)) {
             $argstr2 = $argstr.'&action=dwnpg';
             $link  = htmlspecialchars('/mod/questionnaire/report.php?'.$argstr2);
             $row2[] = new tabobject('downloadcsv', $link, get_string('downloadtextformat', 'questionnaire'));
+            $argstr3 = $argstr.'&action=dwnins';
+            $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
+            $row3[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
+            $row3ins = true;
         }
         if (count($row2) <= 1) {
             $currenttab = 'allreport';
@@ -237,8 +251,12 @@ if ((count($row) > 1) || (!empty($row2) && (count($row2) > 1))) {
         $tabs[] = $row2;
     }
 
-    if (!empty($row3) && (count($row3) > 1)) {
+    if (!empty($row3) && (count($row3) > 1) or $row3ins) {
         $tabs[] = $row3;
+    }
+
+    if (!empty($row4) && (count($row4) > 0)) {
+        $tabs[] = $row4;
     }
 
     $questionnaire->page->add_to_page('tabsarea', print_tabs($tabs, $currenttab, $inactive, $activated, true));
