@@ -62,6 +62,8 @@ class restore_questionnaire_activity_structure_step extends restore_activity_str
                         '/activity/questionnaire/surveys/survey/questions/question');
         $paths[] = new restore_path_element('questionnaire_quest_choice',
                         '/activity/questionnaire/surveys/survey/questions/question/quest_choices/quest_choice');
+        $paths[] = new restore_path_element('questionnaire_quest_ins',
+                        '/activity/questionnaire/surveys/survey/questions/question/quest_choices/quest_ins');
         $paths[] = new restore_path_element('questionnaire_dependency',
                 '/activity/questionnaire/surveys/survey/questions/question/quest_dependencies/quest_dependency');
 
@@ -234,6 +236,34 @@ class restore_questionnaire_activity_structure_step extends restore_activity_str
         $this->set_mapping('questionnaire_quest_choice', $oldid, $newitemid);
     }
 
+    protected function process_questionnaire_quest_ins($data) {
+        global $CFG, $DB;
+
+        $data = (object)$data;
+
+        require_once($CFG->dirroot.'/mod/questionnaire/locallib.php');
+
+        // Some old systems had '' instead of NULL. Change it to NULL.
+        if ($data->value === '') {
+            $data->value = null;
+        }
+
+        // Replace the = separator with :: separator in quest_choice content.
+        // This fixes radio button options using old "value"="display" formats.
+        if (($data->value == null || $data->value == 'NULL') && !preg_match("/^([0-9]{1,3}=.*|!other=.*)$/", $data->content)) {
+            $content = questionnaire_choice_values($data->content);
+            if (strpos($content->text, '=')) {
+                $data->content = str_replace('=', '::', $content->text);
+            }
+        }
+
+        $oldid = $data->id;
+        $data->question_id = $this->get_new_parentid('questionnaire_question');
+
+        // Insert the questionnaire_quest_choice record.
+        $newitemid = $DB->insert_record('questionnaire_quest_ins', $data);
+        $this->set_mapping('questionnaire_quest_ins', $oldid, $newitemid);
+    }
     protected function process_questionnaire_dependency($data) {
         $data = (object)$data;
 
