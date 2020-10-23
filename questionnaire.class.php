@@ -2089,11 +2089,17 @@ class questionnaire {
                         if ($i > 0) {
                             $answertext .= '; ';
                         }
-                        if ($question->choices[$answer->choiceid]->is_other_choice()) {
+                        if ($question->type_id == 11) {
                             $answertext .= $answer->value;
+                            echo $answertext;
+                            exit();
                         } else {
-                            $answertext .= $question->choices[$answer->choiceid]->content;
-                        }
+                           if ($question->choices[$answer->choiceid]->is_other_choice()) {
+                                $answertext .= $answer->value;
+                           } else {
+                                $answertext .= $question->choices[$answer->choiceid]->content;
+                           }
+                       }      
                         $i++;
                     }
                 }
