@@ -2091,15 +2091,13 @@ class questionnaire {
                         }
                         if ($question->type_id == 11) {
                             $answertext .= $answer->value;
-                            echo $answertext;
-                            exit();
                         } else {
                            if ($question->choices[$answer->choiceid]->is_other_choice()) {
                                 $answertext .= $answer->value;
                            } else {
                                 $answertext .= $question->choices[$answer->choiceid]->content;
                            }
-                       }      
+                       }
                         $i++;
                     }
                 }
@@ -2304,7 +2302,8 @@ class questionnaire {
         if (!empty($thankurl)) {
             if (!headers_sent()) {
                 header("Location: $thankurl");
-                exit;
+                
+exit;
             }
             echo '
                 <script language="JavaScript" type="text/javascript">
