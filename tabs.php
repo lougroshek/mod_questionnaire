@@ -93,9 +93,9 @@ if ($questionnaire->capabilities->readownresponses && ($usernumresp > 0)) {
             $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr2);
             $row2[] = new tabobject('mydownloadcsv', $link, get_string('downloadtextformat', 'questionnaire'));
             $argstr3 = $argstr.'&action=dwnins';
-            $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
-            $row3[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
-            $rows3ins = true;
+          //  $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
+          //  $row3[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
+          //  $rows3ins = true;
  
         }
     } else if (in_array($currenttab, array('mybyresponse', 'mysummary'))) {
@@ -175,9 +175,9 @@ if ($questionnaire->can_view_all_responses_anytime($grouplogic, $resplogic)) {
             $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr2);
             $row3[] = new tabobject('downloadcsv', $link, get_string('downloadtextformat', 'questionnaire'));
             $argstr3 = $argstr.'&action=dwnins';
-            $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
-            $row4[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
-            $row3ins = true;
+ //           $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
+ //           $row4[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
+  //          $row3ins = true;
         }
     }
 
@@ -227,9 +227,9 @@ if ($questionnaire->can_view_all_responses_anytime($grouplogic, $resplogic)) {
             $link  = htmlspecialchars('/mod/questionnaire/report.php?'.$argstr2);
             $row2[] = new tabobject('downloadcsv', $link, get_string('downloadtextformat', 'questionnaire'));
             $argstr3 = $argstr.'&action=dwnins';
-            $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
-            $row3[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
-            $row3ins = true;
+//            $link  = $CFG->wwwroot.htmlspecialchars('/mod/questionnaire/report.php?'.$argstr3);
+//            $row3[] = new tabobject('mydownloadcsv', $link, 'Download Instructor Rankings');
+ //           $row3ins = true;
         }
         if (count($row2) <= 1) {
             $currenttab = 'allreport';
