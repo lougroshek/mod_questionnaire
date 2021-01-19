@@ -3515,26 +3515,42 @@ exit;
         $questionidcols = [];
         foreach ($this->questions as $question) {
             // Skip questions that aren't response capable.
-            if (!isset($question->responsetype) or ($question->type_id == 11)) {
+            if (!isset($question->responsetype))  {
                 continue;
             }
             // Establish the table's field names.
             $qid = $question->id;
             $qpos = $question->position;
-            $col = $question->name;
+            $col =  $question->name;
             $type = $question->type_id;
             
             if (in_array($type, $choicetypes)) {
                 /* single or multiple or rate */
-                if (!isset($choicesbyqid[$qid])) {
-                    throw new coding_exception('Choice question has no choices!', 'question id '.$qid.' of type '.$type);
-                }
-                if ($type == 11) {
-               //     $choices = $choicesinsbyqid[$qid];
-                } else {
+                if ($type <> 11) {
+                    if (!isset($choicesbyqid[$qid])) {
+                        throw new coding_exception('Choice question has no choices!', 'question id '.$qid.' of type '.$type);
+                    }
                     $choices = $choicesbyqid[$qid];
                 }
+                
                 switch ($type) {
+                   case QUESINSRATE: //  Rate.
+                       $sqlchoice = "SELECT distinct(staffid) st from {questionnaire_quest_ins} where question_id =  ".$qid;
+                       $choices = $DB->get_records_sql($sqlchoice, array());
+                       $content = $question->content;
+                       $content = strip_tags($content);
+    	                 $content = trim($content);                  
+                       foreach ($choices as $choice) {
+                          $staffid = $choice->st;
+                          $lname = $DB->get_field('user','lastname', array('id' => $staffid));
+                          $fname = $DB->get_field('user','firstname', array('id' => $staffid)) . ' '.$lname;
+                          $staff = $content.$fname;
+                          $col = $staff;
+                          $columns[][$qpos] = $col;
+                          $questionidcols[][$qpos] = $qid.'_'.$choice->st;
+                          array_push($types, $idtocsvmap[$type]);
+                   } 
+                   break;
 
                     case QUESRADIO: // Single.
                     case QUESDROP:
@@ -3622,9 +3638,6 @@ exit;
                             }
                         }
                         break;
-                       case QUESINSRATE: //  Rate.
-
-                        break;
 
                 }
             } else {
@@ -3696,9 +3709,6 @@ exit;
             $question = $this->questions[$qid];
             $qtype = intval($question->type_id);
             $questionobj = $this->questions[$qid];
-            if ($qtype == 11) {
-                break;            
-            }    
             if ($prevresprow !== false && $prevresprow->rid !== $rid) {
                 $output[] = $this->process_csv_row($row, $prevresprow, $currentgroupid, $questionsbyposition,
                     $nbinfocols, $numrespcols, $showincompletes);
@@ -3725,12 +3735,32 @@ exit;
                 $responsetxt = $choicetxt;
                 $row[$position] = $responsetxt;
             } else {
-                if ($type == 11) {
+                if ($qtype == 11) {
                     // ignore
                 } else { 
             	     $position = $questionpositions[$qid];
-                }                
-                if ($questionobj->has_choices()) {
+                }
+                if ($qtype == 11 ) { 
+                    $sqlchoice = "SELECT distinct(staffid) st from {questionnaire_quest_ins} where question_id =  ".$qid;
+                    $choices = $DB->get_records_sql($sqlchoice, array());
+                    foreach ($choices as $choice) {
+                       $key = $qid.'_'.$choice->st;
+                       $position = $questionpositions[$key];
+                       $rankvalue = 'N/A';
+                       // Get the value from the table.
+                       $user = $responserow->userid;                  
+                       $insid = $DB->get_field('questionnaire_quest_ins', 'id', array('question_id' => $qid, 'staffid' => $choice->st,
+                                               'userid' => $user));
+                       if ($insid) {
+                           $rank = $DB->get_field('questionnaire_response_rank', 'rankvalue', array('choice_id' => $insid));
+                           if ($rank) {
+                      	      $rankvalue = $rank;
+                           }
+                       }    	  
+                       $row[$position] = $rankvalue;
+                  }               
+                } else {                              
+                    if ($questionobj->has_choices()) {
                     // This is choice type question, so process as so.
                     $c = 0;
                     if (in_array(intval($question->type_id), $choicetypes)) {
@@ -3784,7 +3814,7 @@ exit;
                     unset($responsetxt1);
                 }
             }
-
+          }
             $prevresprow = $responserow;
         }
 

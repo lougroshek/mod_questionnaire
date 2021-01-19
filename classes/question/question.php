@@ -249,7 +249,7 @@ abstract class question {
                             $user = $CFG->ruserid;
                         }
                     }
-                    $insrecord = $DB->get_record('questionnaire_quest_ins', array('userid' => $user,
+                    $insrecord = $DB->get_records('questionnaire_quest_ins', array('userid' => $user,
                                                  'staffid' => $teacherid, 'question_id' => $this->id));
                     if (!$insrecord) {
                         $choiceins = new \stdClass();
